@@ -1,0 +1,24 @@
+{
+  "name": "gccli",
+  "version": "0.1.0",
+  "description": "Custom Grok CLI with multi-model support and Core System Skills",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["cli", "grok", "ai", "agent", "skills", "multi-model"],
+  "author": "Danny Ray",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3"
+  }
+}
