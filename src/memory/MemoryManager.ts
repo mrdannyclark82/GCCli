@@ -22,4 +22,40 @@ export class MemoryManager {
   getLongTerm(key: string): any {
     return this.longTermMemory.get(key);
   }
+
+  getState() {
+    return {
+      shortTerm: this.shortTermMemory,
+      longTerm: this.mapToObj(this.longTermMemory)
+    };
+  }
+
+  loadState(state: any) {
+    if (state.shortTerm) {
+      this.shortTermMemory = state.shortTerm;
+    }
+    if (state.longTerm) {
+      this.longTermMemory = this.objToMap(state.longTerm);
+    }
+  }
+
+  private mapToObj(map: Map<string, any>): Record<string, any> {
+    const obj: Record<string, any> = {};
+    for (const [key, value] of map) {
+      obj[key] = (value instanceof Map) ? this.mapToObj(value) : value;
+    }
+    return obj;
+  }
+
+  private objToMap(obj: Record<string, any>): Map<string, any> {
+    const map = new Map<string, any>();
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        map.set(key, this.objToMap(value));
+      } else {
+        map.set(key, value);
+      }
+    }
+    return map;
+  }
 }
