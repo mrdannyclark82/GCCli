@@ -47,7 +47,7 @@ export class CliLoop {
     this.rl.on('line', (line) => {
       const parsed = this.parser.parse(line);
 
-      if (parsed.type === 'chat' && !parsed.payload) {
+      if (parsed.type === 'chat' && !parsed.rawPayload) {
         this.rl.prompt();
         return;
       }
@@ -55,33 +55,41 @@ export class CliLoop {
       // Append to local history list and persist
       this.appendHistory(line.trim());
 
-      switch (parsed.type) {
-        case 'exit':
-          this.output.write("Exiting GCCli. Goodbye!\n");
-          this.rl.close();
-          return;
+      // Special handling for exit which is still a dedicated type
+      if (parsed.type === 'exit') {
+        this.output.write("Exiting GCCli. Goodbye!\n");
+        this.rl.close();
+        return;
+      }
 
-        case 'help':
-          this.output.write("🌿 GCCli - Available Commands:\n");
-          this.output.write("  /help                     Show this help overview\n");
-          this.output.write("  /exit                     Exit the interactive shell\n");
-          this.output.write("  /model <name>             Switch active AI model runtime\n");
-          this.output.write("  /teleport export <file>   Export internal agent state\n");
-          this.output.write("  /teleport import <file>   Import internal agent state\n");
-          break;
+      if (parsed.type === 'command') {
+        switch (parsed.name) {
+          case 'help':
+            this.output.write("🌿 GCCli - Available Commands:\n");
+            this.output.write("  /help                     Show this help overview\n");
+            this.output.write("  /exit                     Exit the interactive shell\n");
+            this.output.write("  /model <name>             Switch active AI model runtime\n");
+            this.output.write("  /teleport export <file>   Export internal agent state\n");
+            this.output.write("  /teleport import <file>   Import internal agent state\n");
+            break;
 
-        case 'model':
-          this.output.write(`[Router] Switching active model to: ${parsed.payload}\n`);
-          break;
+          case 'model':
+            this.output.write(`[Router] Switching active model to: ${parsed.rawPayload}\n`);
+            break;
 
-        case 'teleport':
-          this.output.write(`[Teleportation] Initiating action: ${parsed.action} on path: ${parsed.payload}\n`);
-          break;
+          case 'teleport':
+            const action = parsed.args[0] || '';
+            const path = parsed.args[1] || '';
+            this.output.write(`[Teleportation] Initiating action: ${action} on path: ${path}\n`);
+            break;
 
-        case 'chat':
-        default:
-          this.output.write(`[Processed]: ${parsed.payload}\n`);
-          break;
+          default:
+            this.output.write(`[Command] Unknown command: /${parsed.name}\n`);
+            break;
+        }
+      } else {
+        // Chat type
+        this.output.write(`[Processed]: ${parsed.rawPayload}\n`);
       }
 
       this.rl.prompt();
@@ -132,7 +140,7 @@ export class CliLoop {
       }
       fs.appendFileSync(this.historyPath, `${line}\n`, 'utf8');
     } catch (err: any) {
-      // Silent catch or simple log
+      this.output.write(`[Error] Failed to append history: ${err.message}\n`);
     }
   }
 

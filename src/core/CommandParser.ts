@@ -1,7 +1,9 @@
 export interface ParsedCommand {
-  type: 'chat' | 'help' | 'exit' | 'model' | 'teleport';
-  action?: 'export' | 'import';
-  payload: string;
+  type: 'chat' | 'command' | 'exit';
+  name?: string;
+  args: string[];
+  flags: Record<string, string | boolean>;
+  rawPayload: string;
 }
 
 export class CommandParser {
@@ -12,47 +14,49 @@ export class CommandParser {
     const trimmed = input.trim();
 
     if (!trimmed) {
-      return { type: 'chat', payload: '' };
+      return { type: 'chat', args: [], flags: {}, rawPayload: '' };
     }
 
     // Check if it's a slash command
     if (trimmed.startsWith('/')) {
       const parts = trimmed.split(/\s+/);
-      const command = parts[0].toLowerCase();
-      const payload = parts.slice(1).join(' ').trim();
+      const name = parts[0].substring(1).toLowerCase();
+      const rawArgs = parts.slice(1);
+      
+      const args: string[] = [];
+      const flags: Record<string, string | boolean> = {};
 
-      if (command === '/help') {
-        return { type: 'help', payload };
-      }
-
-      if (command === '/exit') {
-        return { type: 'exit', payload };
-      }
-
-      if (command === '/model') {
-        return { type: 'model', payload };
-      }
-
-      if (command === '/teleport') {
-        const action = parts[1] ? parts[1].toLowerCase() : '';
-        const filePayload = parts.slice(2).join(' ').trim();
-        
-        if (action === 'export' || action === 'import') {
-          return {
-            type: 'teleport',
-            action: action as 'export' | 'import',
-            payload: filePayload
-          };
+      for (const part of rawArgs) {
+        if (part.startsWith('--')) {
+          const [keyWithPrefix, value] = part.split('=');
+          const key = keyWithPrefix.substring(2);
+          flags[key] = value !== undefined ? value : true;
+        } else if (part.startsWith('-')) {
+          const key = part.substring(1);
+          flags[key] = true;
+        } else {
+          args.push(part);
         }
-        
-        return {
-          type: 'teleport',
-          payload: parts.slice(1).join(' ').trim()
-        };
       }
+
+      const rawPayload = parts.slice(1).join(' ').trim();
+      const type = name === 'exit' ? 'exit' : 'command';
+
+      return {
+        type,
+        name,
+        args,
+        flags,
+        rawPayload
+      };
     }
 
     // Default to plain chat response
-    return { type: 'chat', payload: trimmed };
+    return { 
+      type: 'chat', 
+      args: [], 
+      flags: {}, 
+      rawPayload: trimmed 
+    };
   }
 }
