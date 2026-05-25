@@ -18,13 +18,17 @@ export class XaiProvider extends ModelProvider {
     messages: ChatMessage[],
     options: ChatOptions
   ): Promise<ChatResponse | AsyncIterable<ChatChunk>> {
-    const payload = {
+    const payload: any = {
       messages,
       model: options.model || 'grok-beta',
       stream: options.streaming || false,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens,
     };
+
+    if (options.tools && options.tools.length > 0) {
+      payload.tools = options.tools;
+    }
 
     const response = await fetch(this.apiUrl, {
       method: 'POST',
@@ -47,6 +51,7 @@ export class XaiProvider extends ModelProvider {
       return {
         content: data.choices[0].message.content,
         model: data.model,
+        tool_calls: data.choices[0].message.tool_calls,
         usage: data.usage ? {
           promptTokens: data.usage.prompt_tokens,
           completionTokens: data.usage.completion_tokens,
@@ -80,9 +85,22 @@ export class XaiProvider extends ModelProvider {
           if (trimmedLine.startsWith('data: ')) {
             try {
               const json = JSON.parse(trimmedLine.slice(6));
-              const content = json.choices[0]?.delta?.content;
-              if (content) {
-                yield { type: 'text', content };
+              const delta = json.choices[0]?.delta;
+              
+              if (delta?.content) {
+                yield { type: 'text', content: delta.content };
+              }
+
+              if (delta?.tool_calls) {
+                for (const toolCall of delta.tool_calls) {
+                  yield {
+                    type: 'tool_call',
+                    index: toolCall.index,
+                    id: toolCall.id,
+                    name: toolCall.function?.name,
+                    arguments: toolCall.function?.arguments,
+                  };
+                }
               }
             } catch (e) {
               console.error('Error parsing SSE chunk:', e, trimmedLine);
