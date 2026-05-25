@@ -59,7 +59,7 @@ const browserSkill = new BrowserSkill();
 const skills = [
   new TeleportationSkill(memory),
   browserSkill,
-  new UnifierSkill(browserSkill, router),
+  new UnifierSkill(browserSkill, router, memory),
   proactive
 ];
 
