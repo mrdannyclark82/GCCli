@@ -6,6 +6,7 @@ import { MemoryManager } from './memory/MemoryManager.js';
 import { FileMemoryProvider, SqliteMemoryProvider, RedisMemoryProvider } from './memory/providers/index.js';
 import { TeleportationSkill } from './skills/Teleportation.js';
 import { BrowserSkill } from './skills/BrowserSkill.js';
+import { UnifierSkill } from './skills/UnifierSkill.js';
 import { Proactive } from './skills/Proactive.js';
 import { commandRegistry } from './core/CommandRegistry.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
@@ -54,9 +55,11 @@ const router = new MultiModelRouter();
 
 // Initialize Skills
 const proactive = new Proactive();
+const browserSkill = new BrowserSkill();
 const skills = [
   new TeleportationSkill(memory),
-  new BrowserSkill(),
+  browserSkill,
+  new UnifierSkill(browserSkill, router),
   proactive
 ];
 

@@ -63,6 +63,7 @@ export class BrowserSkill extends CoreSystemSkill {
     const { action, query, url } = context;
     if (action === 'search') return this.webSearch(query);
     if (action === 'extract') return this.webExtract(url);
+    if (action === 'harvest') return this.webHarvest();
     if (action === 'interactive') {
       await this.getBrowserContext({ headless: false });
       const ctx = await this.getBrowserContext();
@@ -127,6 +128,15 @@ export class BrowserSkill extends CoreSystemSkill {
           required: ['url']
         },
         execute: async ({ url }) => this.webExtract(url)
+      },
+      {
+        name: 'web_harvest',
+        description: 'Extracts the raw text content from the currently active browser page.',
+        schema: {
+          type: 'object',
+          properties: {}
+        },
+        execute: async () => this.webHarvest()
       }
     ];
   }
@@ -192,6 +202,26 @@ export class BrowserSkill extends CoreSystemSkill {
       return `Error extracting content: ${error.message}`;
     } finally {
       await page.close();
+    }
+  }
+
+  private async webHarvest() {
+    console.log(`[Browser] Harvesting content from active page...`);
+    if (!this.context) {
+      return "Error: No active browser context. Use /browser interactive first.";
+    }
+    const pages = this.context.pages();
+    if (pages.length === 0) {
+      return "Error: No active pages found in browser context.";
+    }
+    // Get the last page as the "active" one
+    const page = pages[pages.length - 1];
+    try {
+      const text = await page.innerText('body');
+      return text || 'No content found on the active page.';
+    } catch (error: any) {
+      console.error(`[Browser] Harvest error: ${error.message}`);
+      return `Error harvesting content: ${error.message}`;
     }
   }
 
