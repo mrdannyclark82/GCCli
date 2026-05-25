@@ -1,6 +1,6 @@
 import { XaiProvider } from './providers/XaiProvider.js';
 import { ModelProvider } from './ModelProvider.js';
-import { ChatMessage, ChatOptions, ChatResponse } from './types.js';
+import { ChatMessage, ChatOptions, ChatResponse, ChatChunk } from './types.js';
 
 export class MultiModelRouter {
   private providers: Map<string, ModelProvider> = new Map();
@@ -13,7 +13,7 @@ export class MultiModelRouter {
   async chat(
     messages: ChatMessage[],
     options: ChatOptions = {}
-  ): Promise<ChatResponse | AsyncIterable<string>> {
+  ): Promise<ChatResponse | AsyncIterable<ChatChunk>> {
     const provider = this.providers.get(this.activeProviderKey);
     
     if (!provider) {

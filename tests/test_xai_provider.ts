@@ -1,5 +1,5 @@
 import { XaiProvider } from '../src/router/providers/XaiProvider.js';
-import { ChatMessage } from '../src/router/types.js';
+import { ChatMessage, ChatChunk } from '../src/router/types.js';
 
 async function runXaiProviderTest() {
   console.log("\n" + "=".repeat(50));
@@ -73,10 +73,12 @@ async function runXaiProviderTest() {
 
   global.fetch = async () => mockStreamingResponse as any;
 
-  const stream = await provider.chat(messages, { streaming: true }) as AsyncIterable<string>;
+  const stream = await provider.chat(messages, { streaming: true }) as AsyncIterable<ChatChunk>;
   let fullContent = '';
   for await (const chunk of stream) {
-    fullContent += chunk;
+    if (chunk.type === 'text') {
+      fullContent += chunk.content;
+    }
   }
 
   console.log("Streaming full content:", fullContent);

@@ -1,5 +1,5 @@
 import { ModelProvider } from '../ModelProvider.js';
-import { ChatMessage, ChatOptions, ChatResponse } from '../types.js';
+import { ChatMessage, ChatOptions, ChatResponse, ChatChunk } from '../types.js';
 
 export class XaiProvider extends ModelProvider {
   private readonly apiKey: string;
@@ -17,7 +17,7 @@ export class XaiProvider extends ModelProvider {
   async chat(
     messages: ChatMessage[],
     options: ChatOptions
-  ): Promise<ChatResponse | AsyncIterable<string>> {
+  ): Promise<ChatResponse | AsyncIterable<ChatChunk>> {
     const payload = {
       messages,
       model: options.model || 'grok-beta',
@@ -55,7 +55,7 @@ export class XaiProvider extends ModelProvider {
     }
   }
 
-  private async *handleStreamingResponse(response: Response): AsyncIterable<string> {
+  private async *handleStreamingResponse(response: Response): AsyncIterable<ChatChunk> {
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error('Response body is not readable');
@@ -82,7 +82,7 @@ export class XaiProvider extends ModelProvider {
               const json = JSON.parse(trimmedLine.slice(6));
               const content = json.choices[0]?.delta?.content;
               if (content) {
-                yield content;
+                yield { type: 'text', content };
               }
             } catch (e) {
               console.error('Error parsing SSE chunk:', e, trimmedLine);

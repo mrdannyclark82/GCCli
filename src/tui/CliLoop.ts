@@ -8,6 +8,7 @@ import { CommandParser } from '../core/CommandParser.js';
 import { commandRegistry } from '../core/CommandRegistry.js';
 import { MultiModelRouter } from '../router/MultiModelRouter.js';
 import { MemoryManager } from '../memory/MemoryManager.js';
+import { ChatChunk } from '../router/types.js';
 
 export interface CliLoopOptions {
   input?: Readable;
@@ -139,8 +140,14 @@ export class CliLoop {
           );
 
           if (Symbol.asyncIterator in result) {
-            for await (const chunk of result as AsyncIterable<string>) {
-              this.output.write(chunk);
+            for await (const chunk of result as AsyncIterable<ChatChunk>) {
+              if (chunk.type === 'text') {
+                this.output.write(chunk.content);
+              } else if (chunk.type === 'tool_call') {
+                // For now, we might want to log that a tool call was received
+                // This will be properly handled in later steps of Phase 3
+                // this.output.write(`\n[System] Tool Call: ${chunk.name}\n`);
+              }
             }
             this.output.write('\n');
           } else {
