@@ -270,6 +270,26 @@ export class CliLoop {
   }
 
   /**
+   * Prints a message from the proactive engine without breaking the prompt.
+   */
+  printProactiveMessage(message: string) {
+    if (!this.rl) {
+      this.output.write(`\n✨ [Proactive] ${message}\n`);
+      return;
+    }
+
+    // Move to the beginning of the line and clear it
+    readline.cursorTo(process.stdout, 0);
+    readline.clearLine(process.stdout, 0);
+
+    // Print the proactive message
+    this.output.write(`\n✨ [Proactive] ${message}\n\n`);
+
+    // Redraw the prompt
+    this.rl.prompt(true);
+  }
+
+  /**
    * Loads command history from disk.
    */
   private loadHistory() {

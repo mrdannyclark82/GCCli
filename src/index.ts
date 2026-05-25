@@ -6,6 +6,7 @@ import { MemoryManager } from './memory/MemoryManager.js';
 import { FileMemoryProvider, SqliteMemoryProvider, RedisMemoryProvider } from './memory/providers/index.js';
 import { TeleportationSkill } from './skills/Teleportation.js';
 import { BrowserSkill } from './skills/BrowserSkill.js';
+import { Proactive } from './skills/Proactive.js';
 import { commandRegistry } from './core/CommandRegistry.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 
@@ -52,9 +53,11 @@ try {
 const router = new MultiModelRouter();
 
 // Initialize Skills
+const proactive = new Proactive();
 const skills = [
   new TeleportationSkill(memory),
-  new BrowserSkill()
+  new BrowserSkill(),
+  proactive
 ];
 
 // Register skill tools and commands
@@ -77,5 +80,8 @@ for (const skill of skills) {
 }
 
 const cli = new CliLoop({ router, memory });
+
+// Start Proactive Loop
+proactive.startLoop(router, memory, (msg) => cli.printProactiveMessage(msg));
 
 await cli.start();
