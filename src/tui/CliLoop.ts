@@ -7,12 +7,14 @@ import { Readable, Writable } from 'stream';
 import { CommandParser } from '../core/CommandParser.js';
 import { commandRegistry } from '../core/CommandRegistry.js';
 import { MultiModelRouter } from '../router/MultiModelRouter.js';
+import { MemoryManager } from '../memory/MemoryManager.js';
 
 export interface CliLoopOptions {
   input?: Readable;
   output?: Writable;
   historyPath?: string;
   router?: MultiModelRouter;
+  memory?: MemoryManager;
 }
 
 export class CliLoop {
@@ -23,12 +25,14 @@ export class CliLoop {
   private historyList: string[] = [];
   private parser = new CommandParser();
   private router: MultiModelRouter;
+  private memory: MemoryManager;
 
   constructor(options: CliLoopOptions = {}) {
     this.input = options.input || process.stdin;
     this.output = options.output || process.stdout;
     this.historyPath = options.historyPath || path.join(os.homedir(), '.gccli_history');
     this.router = options.router || new MultiModelRouter();
+    this.memory = options.memory || new MemoryManager();
     this.setupCommands();
   }
 
@@ -77,8 +81,9 @@ export class CliLoop {
   /**
    * Initializes history and starts the readline loop.
    */
-  start() {
+  async start() {
     this.loadHistory();
+    await this.memory.initialize();
 
     // Create the readline interface
     this.rl = readline.createInterface({
@@ -147,6 +152,7 @@ export class CliLoop {
         }
       }
 
+      await this.memory.persist();
       this.rl.prompt();
     });
 

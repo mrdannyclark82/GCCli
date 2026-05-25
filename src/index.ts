@@ -2,10 +2,41 @@
 import 'dotenv/config';
 import { MultiModelRouter } from './router/MultiModelRouter.js';
 import { CliLoop } from './tui/CliLoop.js';
+import { MemoryManager } from './memory/MemoryManager.js';
+import { FileMemoryProvider } from './memory/providers/FileMemoryProvider.js';
+import { TeleportationSkill } from './skills/Teleportation.js';
+import { commandRegistry } from './core/CommandRegistry.js';
+import { toolRegistry } from './tools/ToolRegistry.js';
 
 console.log("🌿 GCCli - Custom Grok CLI");
 
+const memory = new MemoryManager(new FileMemoryProvider());
 const router = new MultiModelRouter();
-const cli = new CliLoop({ router });
 
-cli.start();
+// Initialize Skills
+const skills = [
+  new TeleportationSkill(memory)
+];
+
+// Register skill tools and commands
+for (const skill of skills) {
+  await skill.initialize();
+  
+  if (skill.getTools) {
+    const tools = skill.getTools();
+    for (const tool of tools) {
+      toolRegistry.register(tool);
+    }
+  }
+
+  if (skill.getCommands) {
+    const commands = skill.getCommands();
+    for (const cmd of commands) {
+      commandRegistry.register(cmd.metadata, cmd.handler);
+    }
+  }
+}
+
+const cli = new CliLoop({ router, memory });
+
+await cli.start();
