@@ -1,6 +1,7 @@
 export interface Tool {
   name: string;
   description: string;
+  schema: any;
   execute: (args: any) => Promise<any>;
 }
 
