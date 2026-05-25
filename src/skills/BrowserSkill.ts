@@ -1,38 +1,105 @@
-import { chromium, Browser } from 'playwright';
+import { chromium, Browser, BrowserContext } from 'playwright';
 import { CoreSystemSkill } from './CoreSystemSkill.js';
 import { Tool } from '../tools/ToolRegistry.js';
 
 /**
  * BrowserSkill
  * Provides web search and text extraction capabilities using Playwright.
- * Part of Phase 5: Proactive Agency.
+ * Supports an interactive mode for manual logins.
  */
 export class BrowserSkill extends CoreSystemSkill {
   name = 'Browser';
   description = 'Provides web search and extraction capabilities using Playwright.';
   private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
+  private isHeadless: boolean = true;
 
   async initialize(): Promise<void> {
     console.log('[Browser] Skill initialized.');
   }
 
-  private async getBrowser(): Promise<Browser> {
-    if (!this.browser) {
-      try {
-        this.browser = await chromium.launch({ headless: true });
-      } catch (error: any) {
-        console.error(`[Browser] Failed to launch browser: ${error.message}`);
-        throw new Error(`Playwright browser launch failed. Ensure browsers are installed with 'npx playwright install'. Error: ${error.message}`);
+  private async getBrowser(options?: { headless?: boolean }): Promise<Browser> {
+    const requestedHeadless = options?.headless ?? true;
+
+    // Check if browser is still connected; if not, cleanup.
+    if (this.browser && !this.browser.isConnected()) {
+      await this.close();
+    }
+
+    // If browser exists but we need to switch from headless to interactive, restart it.
+    // If we are already interactive (!isHeadless), we stay interactive even if headless is requested.
+    if (this.browser) {
+      if (this.isHeadless === requestedHeadless || !this.isHeadless) {
+        return this.browser;
       }
+      await this.close();
+    }
+
+    try {
+      this.browser = await chromium.launch({ 
+        headless: requestedHeadless,
+        args: requestedHeadless ? [] : ['--start-maximized']
+      });
+      this.isHeadless = requestedHeadless;
+      if (!requestedHeadless) {
+        console.log('[Browser] Interactive browser launched.');
+      }
+    } catch (error: any) {
+      console.error(`[Browser] Failed to launch browser: ${error.message}`);
+      throw new Error(`Playwright browser launch failed. Ensure browsers are installed with 'npx playwright install'. Error: ${error.message}`);
     }
     return this.browser;
+  }
+
+  private async getBrowserContext(options?: { headless?: boolean }): Promise<BrowserContext> {
+    await this.getBrowser(options);
+    if (!this.context) {
+      this.context = await this.browser!.newContext();
+    }
+    return this.context;
   }
 
   async execute(context: any): Promise<any> {
     const { action, query, url } = context;
     if (action === 'search') return this.webSearch(query);
     if (action === 'extract') return this.webExtract(url);
+    if (action === 'interactive') {
+      await this.getBrowserContext({ headless: false });
+      const ctx = await this.getBrowserContext();
+      if (ctx.pages().length === 0) {
+        await ctx.newPage();
+      }
+      return 'Interactive browser launched and ready.';
+    }
+    if (action === 'close') {
+      await this.close();
+      return 'Browser closed.';
+    }
     throw new Error(`Unknown action: ${action}`);
+  }
+
+  getCommands() {
+    return [
+      {
+        metadata: {
+          name: 'browser',
+          description: 'Control the browser (interactive mode or close).',
+          usage: '/browser [interactive|close]'
+        },
+        handler: async (args: string[]) => {
+          const action = args[0];
+          if (action === 'interactive') {
+            await this.execute({ action: 'interactive' });
+            console.log('[Browser] Interactive mode active. You can now use the browser for manual logins.');
+          } else if (action === 'close') {
+            await this.execute({ action: 'close' });
+            console.log('[Browser] Browser closed.');
+          } else {
+            console.log('Usage: /browser [interactive|close]');
+          }
+        }
+      }
+    ];
   }
 
   getTools(): Tool[] {
@@ -66,14 +133,14 @@ export class BrowserSkill extends CoreSystemSkill {
 
   private async webSearch(query: string) {
     console.log(`[Browser] Searching for: "${query}"`);
-    let browser;
+    let context;
     try {
-      browser = await this.getBrowser();
+      context = await this.getBrowserContext();
     } catch (err: any) {
       return err.message;
     }
 
-    const page = await browser.newPage();
+    const page = await context.newPage();
     try {
       // Use DuckDuckGo as the search engine
       await page.goto(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, { waitUntil: 'networkidle' });
@@ -107,14 +174,14 @@ export class BrowserSkill extends CoreSystemSkill {
 
   private async webExtract(url: string) {
     console.log(`[Browser] Extracting content from: ${url}`);
-    let browser;
+    let context;
     try {
-      browser = await this.getBrowser();
+      context = await this.getBrowserContext();
     } catch (err: any) {
       return err.message;
     }
 
-    const page = await browser.newPage();
+    const page = await context.newPage();
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       // Basic text extraction from the body
@@ -129,9 +196,14 @@ export class BrowserSkill extends CoreSystemSkill {
   }
 
   async close() {
+    if (this.context) {
+      await this.context.close();
+      this.context = null;
+    }
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
     }
+    this.isHeadless = true;
   }
 }
