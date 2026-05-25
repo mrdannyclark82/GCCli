@@ -1,6 +1,34 @@
+import { MemoryProvider } from './MemoryProvider.js';
+
 export class MemoryManager {
   private shortTermMemory: any[] = [];
   private longTermMemory: Map<string, any> = new Map();
+  private provider?: MemoryProvider;
+
+  constructor(provider?: MemoryProvider) {
+    this.provider = provider;
+  }
+
+  /**
+   * Persists the current state to the provider.
+   */
+  async persist(): Promise<void> {
+    if (this.provider) {
+      await this.provider.save(this.getState());
+    }
+  }
+
+  /**
+   * Initializes memory by loading state from the provider.
+   */
+  async initialize(): Promise<void> {
+    if (this.provider) {
+      const state = await this.provider.load();
+      if (state) {
+        this.loadState(state);
+      }
+    }
+  }
 
   addToShortTerm(entry: any) {
     this.shortTermMemory.push(entry);
@@ -12,7 +40,8 @@ export class MemoryManager {
 
   async saveToLongTerm(key: string, value: any) {
     this.longTermMemory.set(key, value);
-    // TODO: Persist to disk / vector store later
+    // Persist to provider if available
+    await this.persist();
   }
 
   getShortTerm(): any[] {
