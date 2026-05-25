@@ -48,6 +48,7 @@ Commands are managed via `npm` and are located in the `GCCli` subdirectory.
 - `GCCli/src/index.ts`: Entry point of the application.
 - `GCCli/src/router/MultiModelRouter.ts`: Central routing logic for AI models.
 - `GCCli/src/memory/MemoryManager.ts`: Manages agent memory state with support for state serialization.
+- `GCCli/src/memory/providers/RedisMemoryProvider.ts`: Redis-backed state persistence.
 - `GCCli/src/skills/CoreSystemSkill.ts`: Base class for all system skills.
 - `GCCli/src/skills/Teleportation.ts`: Implementation of cross-session state transfer.
 - `GCCli/src/tools/ToolRegistry.ts`: Central registry for agent tools.
