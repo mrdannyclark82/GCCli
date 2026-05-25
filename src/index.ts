@@ -6,6 +6,6 @@ import { CliLoop } from './tui/CliLoop.js';
 console.log("🌿 GCCli - Custom Grok CLI");
 
 const router = new MultiModelRouter();
-const cli = new CliLoop();
+const cli = new CliLoop({ router });
 
 cli.start();

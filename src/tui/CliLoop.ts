@@ -6,11 +6,13 @@ import { Readable, Writable } from 'stream';
 
 import { CommandParser } from '../core/CommandParser.js';
 import { commandRegistry } from '../core/CommandRegistry.js';
+import { MultiModelRouter } from '../router/MultiModelRouter.js';
 
 export interface CliLoopOptions {
   input?: Readable;
   output?: Writable;
   historyPath?: string;
+  router?: MultiModelRouter;
 }
 
 export class CliLoop {
@@ -20,11 +22,13 @@ export class CliLoop {
   private historyPath: string;
   private historyList: string[] = [];
   private parser = new CommandParser();
+  private router: MultiModelRouter;
 
   constructor(options: CliLoopOptions = {}) {
     this.input = options.input || process.stdin;
     this.output = options.output || process.stdout;
     this.historyPath = options.historyPath || path.join(os.homedir(), '.gccli_history');
+    this.router = options.router || new MultiModelRouter();
     this.setupCommands();
   }
 
@@ -55,8 +59,17 @@ export class CliLoop {
     commandRegistry.register(
       { name: 'model', description: 'Switch active AI model runtime', usage: '/model <name>' },
       (args) => {
-        const modelName = args[0] || 'unknown';
-        this.output.write(`[Router] Switching active model to: ${modelName}\n`);
+        const modelName = args[0];
+        if (!modelName) {
+          this.output.write("[Router] Usage: /model <name>\n");
+          return;
+        }
+        try {
+          this.router.setActiveProvider(modelName);
+          this.output.write(`[Router] Switching active model to: ${modelName}\n`);
+        } catch (err: any) {
+          this.output.write(`[Error] Failed to switch model: ${err.message}\n`);
+        }
       }
     );
   }
@@ -114,7 +127,24 @@ export class CliLoop {
         }
       } else if (parsed.type === 'chat') {
         // Chat type
-        this.output.write(`[Processed]: ${parsed.rawPayload}\n`);
+        try {
+          const result = await this.router.chat(
+            [{ role: 'user', content: parsed.rawPayload }],
+            { streaming: true }
+          );
+
+          if (Symbol.asyncIterator in result) {
+            for await (const chunk of result as AsyncIterable<string>) {
+              this.output.write(chunk);
+            }
+            this.output.write('\n');
+          } else {
+            // Handle non-streaming response if it ever happens
+            this.output.write(`${(result as any).content}\n`);
+          }
+        } catch (err: any) {
+          this.output.write(`[Error] Chat failed: ${err.message}\n`);
+        }
       }
 
       this.rl.prompt();
