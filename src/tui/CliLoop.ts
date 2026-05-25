@@ -5,6 +5,7 @@ import os from 'os';
 import { Readable, Writable } from 'stream';
 
 import { CommandParser } from '../core/CommandParser.js';
+import { commandRegistry } from '../core/CommandRegistry.js';
 
 export interface CliLoopOptions {
   input?: Readable;
@@ -24,6 +25,40 @@ export class CliLoop {
     this.input = options.input || process.stdin;
     this.output = options.output || process.stdout;
     this.historyPath = options.historyPath || path.join(os.homedir(), '.gccli_history');
+    this.setupCommands();
+  }
+
+  /**
+   * Registers core system commands.
+   */
+  private setupCommands() {
+    commandRegistry.register(
+      { name: 'exit', description: 'Exit the interactive shell' },
+      () => {
+        this.output.write("Exiting GCCli. Goodbye!\n");
+        this.rl.close();
+      }
+    );
+
+    commandRegistry.register(
+      { name: 'help', description: 'Show this help overview' },
+      () => {
+        this.output.write("\n🌿 GCCli - Available Commands:\n");
+        const commands = commandRegistry.list();
+        commands.forEach(cmd => {
+          this.output.write(`  /${cmd.name.padEnd(25)} ${cmd.description}\n`);
+        });
+        this.output.write("\n");
+      }
+    );
+
+    commandRegistry.register(
+      { name: 'model', description: 'Switch active AI model runtime', usage: '/model <name>' },
+      (args) => {
+        const modelName = args[0] || 'unknown';
+        this.output.write(`[Router] Switching active model to: ${modelName}\n`);
+      }
+    );
   }
 
   /**
@@ -44,7 +79,7 @@ export class CliLoop {
 
     this.rl.prompt();
 
-    this.rl.on('line', (line) => {
+    this.rl.on('line', async (line) => {
       const parsed = this.parser.parse(line);
 
       if (parsed.type === 'chat' && !parsed.rawPayload) {
@@ -55,39 +90,29 @@ export class CliLoop {
       // Append to local history list and persist
       this.appendHistory(line.trim());
 
-      // Special handling for exit which is still a dedicated type
-      if (parsed.type === 'exit') {
-        this.output.write("Exiting GCCli. Goodbye!\n");
-        this.rl.close();
-        return;
+      if (parsed.type === 'exit' || (parsed.type === 'command' && parsed.name === 'exit')) {
+        const cmd = commandRegistry.get('exit');
+        if (cmd) {
+          cmd.handler(parsed.args, parsed.flags);
+          return;
+        }
       }
 
-      if (parsed.type === 'command') {
-        switch (parsed.name) {
-          case 'help':
-            this.output.write("🌿 GCCli - Available Commands:\n");
-            this.output.write("  /help                     Show this help overview\n");
-            this.output.write("  /exit                     Exit the interactive shell\n");
-            this.output.write("  /model <name>             Switch active AI model runtime\n");
-            this.output.write("  /teleport export <file>   Export internal agent state\n");
-            this.output.write("  /teleport import <file>   Import internal agent state\n");
-            break;
-
-          case 'model':
-            this.output.write(`[Router] Switching active model to: ${parsed.rawPayload}\n`);
-            break;
-
-          case 'teleport':
-            const action = parsed.args[0] || '';
-            const path = parsed.args[1] || '';
-            this.output.write(`[Teleportation] Initiating action: ${action} on path: ${path}\n`);
-            break;
-
-          default:
-            this.output.write(`[Command] Unknown command: /${parsed.name}\n`);
-            break;
+      if (parsed.type === 'command' && parsed.name) {
+        const cmd = commandRegistry.get(parsed.name);
+        if (cmd) {
+          try {
+            const result = cmd.handler(parsed.args, parsed.flags);
+            if (result instanceof Promise) {
+              await result;
+            }
+          } catch (err: any) {
+            this.output.write(`[Error] Command execution failed: ${err.message}\n`);
+          }
+        } else {
+          this.output.write(`[Command] Unknown command: /${parsed.name}\n`);
         }
-      } else {
+      } else if (parsed.type === 'chat') {
         // Chat type
         this.output.write(`[Processed]: ${parsed.rawPayload}\n`);
       }
