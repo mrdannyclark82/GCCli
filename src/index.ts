@@ -5,6 +5,7 @@ import { CliLoop } from './tui/CliLoop.js';
 import { MemoryManager } from './memory/MemoryManager.js';
 import { FileMemoryProvider, SqliteMemoryProvider, RedisMemoryProvider } from './memory/providers/index.js';
 import { TeleportationSkill } from './skills/Teleportation.js';
+import { BrowserSkill } from './skills/BrowserSkill.js';
 import { commandRegistry } from './core/CommandRegistry.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 
@@ -52,7 +53,8 @@ const router = new MultiModelRouter();
 
 // Initialize Skills
 const skills = [
-  new TeleportationSkill(memory)
+  new TeleportationSkill(memory),
+  new BrowserSkill()
 ];
 
 // Register skill tools and commands
