@@ -8,7 +8,8 @@ import { CommandParser } from '../core/CommandParser.js';
 import { commandRegistry } from '../core/CommandRegistry.js';
 import { MultiModelRouter } from '../router/MultiModelRouter.js';
 import { MemoryManager } from '../memory/MemoryManager.js';
-import { ChatChunk } from '../router/types.js';
+import { ChatChunk, ChatMessage, ToolCall } from '../router/types.js';
+import { toolRegistry } from '../tools/ToolRegistry.js';
 
 export interface CliLoopOptions {
   input?: Readable;
@@ -24,6 +25,7 @@ export class CliLoop {
   private output: Writable;
   private historyPath: string;
   private historyList: string[] = [];
+  private chatHistory: ChatMessage[] = [];
   private parser = new CommandParser();
   private router: MultiModelRouter;
   private memory: MemoryManager;
@@ -85,6 +87,7 @@ export class CliLoop {
   async start() {
     this.loadHistory();
     await this.memory.initialize();
+    this.chatHistory = this.memory.getShortTerm() as ChatMessage[];
 
     // Create the readline interface
     this.rl = readline.createInterface({
@@ -134,25 +137,123 @@ export class CliLoop {
       } else if (parsed.type === 'chat') {
         // Chat type
         try {
-          const result = await this.router.chat(
-            [{ role: 'user', content: parsed.rawPayload }],
-            { streaming: true }
-          );
+          const userMessage: ChatMessage = { role: 'user', content: parsed.rawPayload };
+          this.memory.addToShortTerm(userMessage);
 
-          if (Symbol.asyncIterator in result) {
-            for await (const chunk of result as AsyncIterable<ChatChunk>) {
-              if (chunk.type === 'text') {
-                this.output.write(chunk.content);
-              } else if (chunk.type === 'tool_call') {
-                // For now, we might want to log that a tool call was received
-                // This will be properly handled in later steps of Phase 3
-                // this.output.write(`\n[System] Tool Call: ${chunk.name}\n`);
+          let continueAgentLoop = true;
+          let turnCount = 0;
+          const MAX_TURNS = 10;
+
+          while (continueAgentLoop && turnCount < MAX_TURNS) {
+            turnCount++;
+            continueAgentLoop = false;
+
+            const result = await this.router.chat(
+              this.chatHistory,
+              { streaming: true, tools: toolRegistry.getSchemas() }
+            );
+
+            if (Symbol.asyncIterator in result) {
+              let assistantContent = '';
+              const toolCallsBuffer: Map<number, ToolCall> = new Map();
+
+              for await (const chunk of result as AsyncIterable<ChatChunk>) {
+                if (chunk.type === 'text') {
+                  assistantContent += chunk.content;
+                  this.output.write(chunk.content);
+                } else if (chunk.type === 'tool_call') {
+                  if (!toolCallsBuffer.has(chunk.index)) {
+                    toolCallsBuffer.set(chunk.index, {
+                      id: chunk.id || '',
+                      type: 'function',
+                      function: { name: chunk.name || '', arguments: chunk.arguments || '' }
+                    });
+                  } else {
+                    const existing = toolCallsBuffer.get(chunk.index)!;
+                    if (chunk.id) existing.id = chunk.id;
+                    if (chunk.name) existing.function.name += chunk.name;
+                    if (chunk.arguments) existing.function.arguments += chunk.arguments;
+                  }
+                }
+              }
+
+              const toolCalls = Array.from(toolCallsBuffer.values());
+              
+              // Push assistant message to history
+              const assistantMessage: ChatMessage = {
+                role: 'assistant',
+                content: assistantContent || null
+              };
+              if (toolCalls.length > 0) {
+                assistantMessage.tool_calls = toolCalls;
+              }
+              this.memory.addToShortTerm(assistantMessage);
+
+              if (toolCalls.length > 0) {
+                this.output.write('\n');
+                for (const tc of toolCalls) {
+                  this.output.write(`[System] Executing tool: ${tc.function.name}...\n`);
+                  try {
+                    const args = JSON.parse(tc.function.arguments || '{}');
+                    const toolResult = await toolRegistry.execute(tc.function.name, args);
+                    
+                    this.memory.addToShortTerm({
+                      role: 'tool',
+                      tool_call_id: tc.id,
+                      content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
+                    });
+                    continueAgentLoop = true;
+                  } catch (err: any) {
+                    this.memory.addToShortTerm({
+                      role: 'tool',
+                      tool_call_id: tc.id,
+                      content: `Error: ${err.message}`
+                    });
+                    continueAgentLoop = true;
+                  }
+                }
+              } else {
+                this.output.write('\n');
+              }
+            } else {
+              // Handle non-streaming response if it ever happens
+              const response = result as any;
+              this.output.write(`${response.content || ''}\n`);
+              
+              const assistantMessage: ChatMessage = {
+                role: 'assistant',
+                content: response.content || null
+              };
+              if (response.tool_calls) {
+                assistantMessage.tool_calls = response.tool_calls;
+              }
+              this.memory.addToShortTerm(assistantMessage);
+
+              if (response.tool_calls && response.tool_calls.length > 0) {
+                for (const tc of response.tool_calls) {
+                  this.output.write(`[System] Executing tool: ${tc.function.name}...\n`);
+                  try {
+                    const args = typeof tc.function.arguments === 'string' 
+                      ? JSON.parse(tc.function.arguments) 
+                      : tc.function.arguments;
+                    const toolResult = await toolRegistry.execute(tc.function.name, args);
+                    this.memory.addToShortTerm({
+                      role: 'tool',
+                      tool_call_id: tc.id,
+                      content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
+                    });
+                    continueAgentLoop = true;
+                  } catch (err: any) {
+                    this.memory.addToShortTerm({
+                      role: 'tool',
+                      tool_call_id: tc.id,
+                      content: `Error: ${err.message}`
+                    });
+                    continueAgentLoop = true;
+                  }
+                }
               }
             }
-            this.output.write('\n');
-          } else {
-            // Handle non-streaming response if it ever happens
-            this.output.write(`${(result as any).content}\n`);
           }
         } catch (err: any) {
           this.output.write(`[Error] Chat failed: ${err.message}\n`);

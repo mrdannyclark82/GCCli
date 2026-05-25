@@ -1,7 +1,9 @@
+import { ToolSchema } from '../router/types.js';
+
 export interface Tool {
   name: string;
   description: string;
-  schema: any;
+  schema: any; // Parameters schema
   execute: (args: any) => Promise<any>;
 }
 
@@ -19,6 +21,17 @@ export class ToolRegistry {
 
   list(): string[] {
     return Array.from(this.tools.keys());
+  }
+
+  getSchemas(): ToolSchema[] {
+    return Array.from(this.tools.values()).map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.schema
+      }
+    }));
   }
 
   async execute(name: string, args: any): Promise<any> {
