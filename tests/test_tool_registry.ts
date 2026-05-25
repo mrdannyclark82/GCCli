@@ -20,6 +20,42 @@ async function runToolRegistryTest() {
     throw new Error("Tool 'test_tool' not found in registry list.");
   }
   console.log("  [SUCCESS] Tool registered and listed.");
+
+  console.log("[STEP 2] Testing tool execution...");
+  const result = await registry.execute('test_tool', { input: 'hello' });
+  if (result !== 'Result: hello') {
+    throw new Error(`Expected 'Result: hello', got '${result}'`);
+  }
+  console.log("  [SUCCESS] Tool executed correctly.");
+
+  console.log("[STEP 3] Testing non-existent tool execution...");
+  try {
+    await registry.execute('non_existent', {});
+    throw new Error("Should have thrown error for non-existent tool.");
+  } catch (error: any) {
+    if (!error.message.includes('Tool not found')) {
+      throw error;
+    }
+  }
+  console.log("  [SUCCESS] Handled non-existent tool correctly.");
+
+  console.log("[STEP 4] Testing tool execution failure...");
+  const failingTool: Tool = {
+    name: 'failing_tool',
+    description: 'A failing tool',
+    schema: {},
+    execute: async () => { throw new Error("Inside tool error"); }
+  };
+  registry.register(failingTool);
+  try {
+    await registry.execute('failing_tool', {});
+    throw new Error("Should have thrown error for failing tool.");
+  } catch (error: any) {
+    if (!error.message.includes('Inside tool error')) {
+      throw error;
+    }
+  }
+  console.log("  [SUCCESS] Handled tool execution failure correctly.");
 }
 
 runToolRegistryTest().catch(err => {

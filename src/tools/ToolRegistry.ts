@@ -20,4 +20,17 @@ export class ToolRegistry {
   list(): string[] {
     return Array.from(this.tools.keys());
   }
+
+  async execute(name: string, args: any): Promise<any> {
+    const tool = this.get(name);
+    if (!tool) {
+      throw new Error(`Tool not found: ${name}`);
+    }
+    try {
+      return await tool.execute(args);
+    } catch (error: any) {
+      console.error(`[Tools] Error executing tool ${name}:`, error.message);
+      throw new Error(`Execution failed for tool ${name}: ${error.message}`);
+    }
+  }
 }
