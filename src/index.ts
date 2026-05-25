@@ -3,14 +3,51 @@ import 'dotenv/config';
 import { MultiModelRouter } from './router/MultiModelRouter.js';
 import { CliLoop } from './tui/CliLoop.js';
 import { MemoryManager } from './memory/MemoryManager.js';
-import { FileMemoryProvider } from './memory/providers/FileMemoryProvider.js';
+import { FileMemoryProvider, SqliteMemoryProvider, RedisMemoryProvider } from './memory/providers/index.js';
 import { TeleportationSkill } from './skills/Teleportation.js';
 import { commandRegistry } from './core/CommandRegistry.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 
 console.log("🌿 GCCli - Custom Grok CLI");
 
-const memory = new MemoryManager(new FileMemoryProvider());
+// Pluggable Bootstrapping for Memory Provider
+let memoryProvider;
+const providerType = process.env.MEMORY_PROVIDER?.toLowerCase() || 'file';
+
+try {
+  switch (providerType) {
+    case 'sqlite':
+      memoryProvider = new SqliteMemoryProvider();
+      break;
+    case 'redis':
+      memoryProvider = new RedisMemoryProvider(process.env.REDIS_URL);
+      break;
+    case 'file':
+    default:
+      memoryProvider = new FileMemoryProvider();
+  }
+} catch (err: any) {
+  console.warn(`⚠️ [Warning] Failed to initialize ${providerType} memory provider: ${err.message}. Falling back to FileMemoryProvider.`);
+  memoryProvider = new FileMemoryProvider();
+}
+
+const memory = new MemoryManager(memoryProvider);
+
+// Early initialization check to ensure graceful fallback if the chosen provider fails to load (e.g. Redis connection)
+try {
+  await memory.initialize();
+} catch (err: any) {
+  if (providerType !== 'file') {
+    console.warn(`⚠️ [Warning] Failed to initialize ${providerType} memory provider: ${err.message}. Falling back to FileMemoryProvider.`);
+    memoryProvider = new FileMemoryProvider();
+    memory.setProvider(memoryProvider);
+    await memory.initialize();
+  } else {
+    // If file provider itself fails, we let it throw or it might be a clean slate (handled by provider)
+    throw err;
+  }
+}
+
 const router = new MultiModelRouter();
 
 // Initialize Skills

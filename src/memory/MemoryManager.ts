@@ -10,6 +10,13 @@ export class MemoryManager {
   }
 
   /**
+   * Updates the memory provider.
+   */
+  setProvider(provider: MemoryProvider): void {
+    this.provider = provider;
+  }
+
+  /**
    * Persists the current state to the provider.
    */
   async persist(): Promise<void> {
