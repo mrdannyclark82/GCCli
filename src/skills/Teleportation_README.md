@@ -1,56 +1,57 @@
-# Teleportation Skill - Documentation (Phase 2 Local Focus)
+# Teleportation Skill - Documentation (Phase 3 Security Upgrade)
 
 ## Overview
 The Teleportation skill provides the foundational mechanism for GCCLi's cross-session and cross-platform continuity. It allows an agent instance to dump its entire "brain" (memory, goals, and context) into a JSON file, which can then be read by another instance to resume work seamlessly.
 
-## Security and Integrity
-Starting from Phase 2, the Teleportation skill includes SHA-256 integrity checksums to ensure data consistency and prevent loading of corrupted or tampered state files.
+## Phase 3: Security and Authenticated Handoff
+In Phase 3, the Teleportation skill introduces robust encryption and metadata for authenticated handoffs.
 
-- **Integrity Checksum:** A SHA-256 hash is generated for the state data (memory, goals, and context) and stored in the metadata.
-- **Validation:** During import, the skill automatically recalculates the hash and verifies it against the stored checksum. If a mismatch is detected, an error is thrown to prevent loading invalid state.
-- **Structure Validation:** The skill ensures the imported file follows the expected schema structure before attempting to process the data.
+### AES-256 Encryption
+State files can now be encrypted using AES-256-CBC.
+- **Optional Encryption:** Encryption is triggered by providing an `encryptionKey` during export.
+- **Robustness:** The skill automatically detects if an imported state is encrypted and requires the correct key for decryption.
+- **Integrity First:** The SHA-256 checksum is calculated on the *plaintext* data *before* encryption, ensuring that the integrity of the original data is preserved and verifiable after decryption.
+
+### Authenticated Handoff
+New metadata fields `origin` and `target` have been added to prepare for networked handoffs between different agent instances or platforms.
+- `origin`: Identifier of the agent that exported the state.
+- `target`: Identifier of the intended recipient agent.
 
 ## How to Use
 
-### Exporting State
-To save the current agent state:
-1. Gather the necessary state data (Memory, Goals, Context).
-2. Invoke `teleportation.execute()` with the following context:
+### Exporting State (Encrypted)
+To save the current agent state with encryption:
 ```typescript
 {
   action: 'export',
-  filePath: 'milla_state.json', // optional, defaults to milla_state.json
-  stateData: { ... } // The actual state object adhering to the schema
+  filePath: 'milla_state.json',
+  stateData: { ... },
+  encryptionKey: 'your-secure-key',
+  origin: 'agent-alpha', // optional
+  target: 'agent-beta'   // optional
 }
 ```
 
-### Importing State
-To load a saved state:
-1. Invoke `teleportation.execute()` with the following context:
+### Importing State (Encrypted)
+To load an encrypted state:
 ```typescript
 {
   action: 'import',
-  filePath: 'milla_state.json' // optional, defaults to milla_state.json
+  filePath: 'milla_state.json',
+  encryptionKey: 'your-secure-key'
 }
 ```
-2. The skill returns a `TeleportState` object.
-3. Use the returned state to initialize your `MemoryManager`, `GoalRegistry`, and `AgentContext`.
 
 ## Schema
-See [Teleportation_SCHEMA.md](./Teleportation_SCHEMA.md) for a detailed breakdown of the state structure.
+See [Teleportation_SCHEMA.md](./Teleportation_SCHEMA.md) for a detailed breakdown of the state structure and Phase 3 fields.
 
 ## Capabilities
 - Full export of short-term and long-term memory.
 - Goal and Task context preservation.
-- Schema versioning for future compatibility checks.
-- Human-readable JSON format.
+- Schema versioning (v1.1.0).
+- **AES-256 Encryption.**
+- **Origin/Target metadata for handoffs.**
 
-## Known Limitations (Phase 1)
-- **Security:** No encryption is performed. State files contain plain-text interaction history and facts. Do not share state files containing sensitive information over insecure channels.
-- **Conflict Resolution:** Importing a state will completely overwrite the current instance's memory and goals. There is no merging of "alternate timelines" yet.
-- **Manual Trigger:** In this phase, teleportation must be triggered by an external command or higher-level agent logic. It is not yet proactive.
-- **Single Instance:** Only supports one-to-one state transfer. No swarm-wide synchronization in this phase.
-
-## Future Roadmap (Next Phases)
-- **Phase 3:** Encrypted state packets and authenticated handoff.
-- **Phase 4:** Proactive teleportation (e.g., "I'm running out of memory here, moving to the server").
+## Known Limitations
+- **Manual Trigger:** In this phase, teleportation must be triggered by an external command or higher-level agent logic.
+- **Key Management:** Users are responsible for securely managing and sharing encryption keys.

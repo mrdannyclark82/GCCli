@@ -1,4 +1,4 @@
-# Teleportation Skill - State Schema (B.A.M. Phase 1)
+# Teleportation Skill - State Schema (B.A.M. Phase 3)
 
 This document defines the minimum state required for a successful "teleportation" (export/import) of the GCCLi agent.
 
@@ -7,10 +7,13 @@ This document defines the minimum state required for a successful "teleportation
 ```json
 {
   "metadata": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "timestamp": "ISO-8601 Timestamp",
     "agentId": "Unique ID of the agent instance",
-    "checksum": "SHA-256 hash of the state data"
+    "checksum": "SHA-256 hash of the state data (plaintext)",
+    "isEncrypted": "boolean",
+    "origin": "signature or public key of origin agent (optional)",
+    "target": "signature or public key of intended target agent (optional)"
   },
   "memory": {
     "shortTerm": [
@@ -34,7 +37,8 @@ This document defines the minimum state required for a successful "teleportation
     "currentTask": "Description of the current active task",
     "activeSkills": ["SkillName", ...],
     "environment": "cli/local/remote"
-  }
+  },
+  "encryptedData": "AES-256 encrypted base64 string (optional, replaces memory/goals/context when isEncrypted is true)"
 }
 ```
 
@@ -44,20 +48,24 @@ This document defines the minimum state required for a successful "teleportation
 - `version`: Version of the teleportation schema to ensure backward compatibility.
 - `timestamp`: When the state was exported.
 - `agentId`: Helps identify which agent this state belongs to.
+- `checksum`: SHA-256 integrity hash.
+- `isEncrypted`: Indicates if the payload is encrypted.
+- `origin`: Authenticated handoff: origin identifier.
+- `target`: Authenticated handoff: target identifier.
 
 ### `memory`
-- `shortTerm`: Recent conversation history (typically last 50 messages).
-- `longTerm`: Persisted facts, learned preferences, and long-term context stored as key-value pairs.
+- `shortTerm`: Recent conversation history.
+- `longTerm`: Persisted facts and context.
 
 ### `goals`
-- A list of high-level objectives the agent is currently pursuing. Includes status and priority.
+- High-level objectives and status.
 
 ### `context`
-- `currentTask`: The immediate, granular task the agent is working on.
-- `activeSkills`: List of skills currently initialized or in-use.
-- `environment`: Information about the runtime environment.
+- Runtime context and active skills.
 
-## Phase 1 Limitations
-- No encryption: State is exported as plain-text JSON.
-- No automatic conflict resolution: Importing a state overwrites the current session state.
-- Single-file: All data is contained in a single JSON file.
+### `encryptedData`
+- If `isEncrypted` is true, the `memory`, `goals`, and `context` fields are removed from the root and their serialized JSON string is stored here after encryption.
+
+## Phase 3 Upgrades
+- **AES-256 Encryption:** Optional encryption for state packets.
+- **Authenticated Handoff:** Added origin and target fields to metadata.
