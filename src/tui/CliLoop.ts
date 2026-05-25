@@ -4,6 +4,8 @@ import path from 'path';
 import os from 'os';
 import { Readable, Writable } from 'stream';
 
+import { CommandParser } from '../core/CommandParser.js';
+
 export interface CliLoopOptions {
   input?: Readable;
   output?: Writable;
@@ -16,6 +18,7 @@ export class CliLoop {
   private output: Writable;
   private historyPath: string;
   private historyList: string[] = [];
+  private parser = new CommandParser();
 
   constructor(options: CliLoopOptions = {}) {
     this.input = options.input || process.stdin;
@@ -42,24 +45,44 @@ export class CliLoop {
     this.rl.prompt();
 
     this.rl.on('line', (line) => {
-      const trimmed = line.trim();
-      if (!trimmed) {
+      const parsed = this.parser.parse(line);
+
+      if (parsed.type === 'chat' && !parsed.payload) {
         this.rl.prompt();
         return;
       }
 
-      // Handle simple exit commands directly
-      if (trimmed === 'exit' || trimmed === '/exit') {
-        this.output.write("Exiting GCCli. Goodbye!\n");
-        this.rl.close();
-        return;
-      }
-
       // Append to local history list and persist
-      this.appendHistory(trimmed);
+      this.appendHistory(line.trim());
 
-      // Simple mock processing output
-      this.output.write(`[Processed]: ${trimmed}\n`);
+      switch (parsed.type) {
+        case 'exit':
+          this.output.write("Exiting GCCli. Goodbye!\n");
+          this.rl.close();
+          return;
+
+        case 'help':
+          this.output.write("🌿 GCCli - Available Commands:\n");
+          this.output.write("  /help                     Show this help overview\n");
+          this.output.write("  /exit                     Exit the interactive shell\n");
+          this.output.write("  /model <name>             Switch active AI model runtime\n");
+          this.output.write("  /teleport export <file>   Export internal agent state\n");
+          this.output.write("  /teleport import <file>   Import internal agent state\n");
+          break;
+
+        case 'model':
+          this.output.write(`[Router] Switching active model to: ${parsed.payload}\n`);
+          break;
+
+        case 'teleport':
+          this.output.write(`[Teleportation] Initiating action: ${parsed.action} on path: ${parsed.payload}\n`);
+          break;
+
+        case 'chat':
+        default:
+          this.output.write(`[Processed]: ${parsed.payload}\n`);
+          break;
+      }
 
       this.rl.prompt();
     });
